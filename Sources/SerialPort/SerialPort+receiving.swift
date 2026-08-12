@@ -12,6 +12,7 @@ extension SerialPort {
     var mReceivedData = Data ()
     var mReceivedStringFragment = ""
     var mReceivedLinesBuffer = [String] ()
+    var mConsoleLogIsEnabled = false
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -58,7 +59,10 @@ extension SerialPort {
       self.mReceivedDataHandler.withLock {
         $0.mReceivedData += data
         if let s = String (data: $0.mReceivedData, encoding: .utf8) {
-          Task { @MainActor in self.updateUIOnReceiving (string: s) }
+          self.reportReceivingState ()
+          if $0.mConsoleLogIsEnabled {
+            self.updateUIOnReceiving (string: s)
+          }
           $0.mReceivedData.removeAll ()
           $0.mReceivedStringFragment += s
           let unixString = $0.mReceivedStringFragment.replacingOccurrences (of: "\r\n", with: "\n")
@@ -69,6 +73,33 @@ extension SerialPort {
       }
     }
 //    exitTracing ("handle.receive.data")
+  }
+
+ // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  nonisolated private func updateUIOnReceiving (string inString : String) {
+    let atStringArray = inString.unicodeScalars.map { scalar -> AttributedString in
+      if scalar.isASCII, scalar.value < 0x20, scalar.value != 0x0A, scalar.value != 0x0D {
+        var attributeContainer = AttributeContainer ()
+        attributeContainer.font = Font.custom ("Menlo", size: 12)
+        attributeContainer.foregroundColor = kReceiveColor
+        attributeContainer.backgroundColor = kCtrlCharacterBackColor
+        return AttributedString (
+          unsafe String (format: "<0x%02X>", scalar.value),
+          attributes: attributeContainer
+        )
+      }else{
+        var attributeContainer = AttributeContainer ()
+        attributeContainer.font = Font.custom ("Menlo", size: 12)
+        attributeContainer.foregroundColor = kReceiveColor
+        return AttributedString (String (scalar), attributes: attributeContainer)
+      }
+    }
+    var attributedString = AttributedString ()
+    for at in atStringArray {
+      attributedString.append (at)
+    }
+    self.appendToConsoleAttributedString (attributedString)
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -104,34 +135,6 @@ extension SerialPort {
       $0.mReceivedData.removeAll ()
       $0.mReceivedStringFragment = ""
       $0.mReceivedLinesBuffer.removeAll ()
-    }
-  }
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-  @MainActor private func updateUIOnReceiving (string inString : String) {
-    self.reportReceivingState ()
-    if self.mConsoleLogIsEnabled {
-      let atStringArray = inString.unicodeScalars.map { scalar -> AttributedString in
-        if scalar.isASCII, scalar.value < 0x20, scalar.value != 0x0A, scalar.value != 0x0D {
-          var attributeContainer = AttributeContainer ()
-          attributeContainer.font = Font.custom ("Menlo", size: 12)
-          attributeContainer.foregroundColor = kReceiveColor
-          attributeContainer.backgroundColor = kCtrlCharacterBackColor
-          return AttributedString (
-            unsafe String (format: "<0x%02X>", scalar.value),
-            attributes: attributeContainer
-          )
-        }else{
-          var attributeContainer = AttributeContainer ()
-          attributeContainer.font = Font.custom ("Menlo", size: 12)
-          attributeContainer.foregroundColor = kReceiveColor
-          return AttributedString (String (scalar), attributes: attributeContainer)
-        }
-      }
-      for at in atStringArray {
-        self.mConsoleAttributedString.append (at)
-      }
     }
   }
 

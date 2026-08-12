@@ -24,15 +24,14 @@ extension SerialPort {
             sent += n
           }
         }
-        Task { @MainActor in
-         self.reportSendingState ()
-         if self.mConsoleLogIsEnabled {
-            var attributeContainer = AttributeContainer ()
-            attributeContainer.font = Font.custom ("Menlo", size: 12)
-            attributeContainer.foregroundColor = kSendColor
-            let at = AttributedString (inString, attributes: attributeContainer)
-            self.mConsoleAttributedString.append (at)
-          }
+        self.reportSendingState ()
+        let consoleLogIsEnabled = self.mReceivedDataHandler.withLock { $0.mConsoleLogIsEnabled }
+        if consoleLogIsEnabled {
+          var attributeContainer = AttributeContainer ()
+          attributeContainer.font = Font.custom ("Menlo", size: 12)
+          attributeContainer.foregroundColor = kSendColor
+          let at = AttributedString (inString, attributes: attributeContainer)
+          self.appendToConsoleAttributedString (at)
         }
       }
     }else{
@@ -49,21 +48,20 @@ extension SerialPort {
 //    enterTracing ("send.data")
     if let fd = self.mFileDescriptor.withLock ( { $0 } ) {
       _ = unsafe inData.withUnsafeBytes { unsafe Darwin.write (fd, $0.baseAddress, inData.count) }
-      Task { @MainActor in
-        self.reportSendingState ()
-        if self.mConsoleLogIsEnabled {
-          var s = ""
-          for byte in inData {
-            s += unsafe String (format: "<0x%02X>", byte)
-          }
-          s += "\n"
-          var attributeContainer = AttributeContainer ()
-          attributeContainer.font = Font.custom ("Menlo", size: 12)
-          attributeContainer.foregroundColor = kSendColor
-          attributeContainer.backgroundColor = kCtrlCharacterBackColor
-          let at = AttributedString (s, attributes: attributeContainer)
-          self.mConsoleAttributedString.append (at)
+      self.reportSendingState ()
+      let consoleLogIsEnabled = self.mReceivedDataHandler.withLock { $0.mConsoleLogIsEnabled }
+      if consoleLogIsEnabled {
+        var s = ""
+        for byte in inData {
+          s += unsafe String (format: "<0x%02X>", byte)
         }
+        s += "\n"
+        var attributeContainer = AttributeContainer ()
+        attributeContainer.font = Font.custom ("Menlo", size: 12)
+        attributeContainer.foregroundColor = kSendColor
+        attributeContainer.backgroundColor = kCtrlCharacterBackColor
+        let at = AttributedString (s, attributes: attributeContainer)
+        self.appendToConsoleAttributedString (at)
       }
     }
 //    exitTracing ("send.data")

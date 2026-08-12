@@ -38,7 +38,7 @@ public struct NonEditableTextView : View {
         }
       }
       .onChange (of: self.mAttributedString) {
-        if mAutoScroll {
+        if self.mAutoScroll {
           Task { @MainActor in
             readyProxy.scrollTo (self.mScrollToBottomID, anchor: .bottom)
           }

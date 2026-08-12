@@ -14,7 +14,7 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
 
 //--------------------------------------------------------------------------------------------------
 
-@MainActor @Observable public class SerialPort {
+@MainActor @Observable open class SerialPort {
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -52,38 +52,54 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  private var mSendingReportTimer : Timer? = nil
-  private var mSendingStateReportPhase = ReportPhase.off
+  private struct SendingState {
+    var mSendingReportTimer : Timer? = nil
+    var mSendingStateReportPhase = ReportPhase.off
+    var mWaiting = false
+  }
+  
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  private let mSendingState = Mutex <SendingState> (SendingState ())
   private(set) var mSendingStateReport = false
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  @MainActor func reportSendingState () {
-    switch self.mSendingStateReportPhase {
-    case .signaling :
-      self.mSendingStateReportPhase = .continueSignaling
-    case .continueSignaling :
-      ()
-    case .off :
-      self.mSendingStateReport = true
-      self.mSendingStateReportPhase = .signaling
-      self.mSendingReportTimer = Timer.scheduledTimer (withTimeInterval: 0.125,
-                                                       repeats: false) { [weak self] _ in
-        Task { @MainActor in
-          self?.mSendingStateReport = false
-          self?.mSendingReportTimer = Timer.scheduledTimer (withTimeInterval: 0.125,
-                                                            repeats: false) { [weak self] _ in
-            Task { @MainActor in
-              self?.mSendingReportTimer = nil
-              if let state = self?.mSendingStateReportPhase, state == .continueSignaling {
-                self?.mSendingStateReportPhase = .off
-                self?.reportSendingState ()
-              }else{
-                self?.mSendingStateReportPhase = .off
-              }
-            }
-          }
+  nonisolated func reportSendingState () {
+    self.mSendingState.withLock {
+      switch $0.mSendingStateReportPhase {
+      case .signaling :
+        $0.mSendingStateReportPhase = .continueSignaling
+      case .continueSignaling :
+        ()
+      case .off :
+        Task { @MainActor in self.mSendingStateReport = true }
+        $0.mSendingStateReportPhase = .signaling
+        $0.mWaiting = false
+        let timer = Timer (timeInterval: 0.125, repeats: true) { _ in
+          self.sendingReportTimerDidFire ()
         }
+        $0.mSendingReportTimer = timer
+        RunLoop.main.add (timer, forMode: .common)
+      }
+    }
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  nonisolated func sendingReportTimerDidFire () {
+    self.mSendingState.withLock {
+      if $0.mWaiting {
+        $0.mSendingReportTimer?.invalidate ()
+        $0.mSendingReportTimer = nil
+        let state = $0.mSendingStateReportPhase
+        $0.mSendingStateReportPhase = .off
+        if state == .continueSignaling {
+          Task { self.reportSendingState () }
+        }
+      }else{
+        $0.mWaiting = true
+        Task { @MainActor in self.mSendingStateReport = false }
       }
     }
   }
@@ -98,28 +114,30 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  @MainActor func reportReceivingState () {
-    switch self.mReceivingStateReportPhase {
-    case .signaling :
-      self.mReceivingStateReportPhase = .continueSignaling
-    case .continueSignaling :
-      ()
-    case .off :
-      self.mReceivingStateReport = true
-      self.mReceivingStateReportPhase = .signaling
-      self.mReceivingReportTimer = Timer.scheduledTimer (withTimeInterval: 0.125,
-                                                         repeats: false) { [weak self] _ in
-        Task { @MainActor in
-          self?.mReceivingStateReport = false
-          self?.mReceivingReportTimer = Timer.scheduledTimer (withTimeInterval: 0.125,
-                                                              repeats: false) { [weak self] _ in
-            Task { @MainActor in
-              self?.mReceivingReportTimer = nil
-              if let state = self?.mReceivingStateReportPhase, state == .continueSignaling {
-                self?.mReceivingStateReportPhase = .off
-                self?.reportReceivingState ()
-              }else{
-                self?.mReceivingStateReportPhase = .off
+  nonisolated func reportReceivingState () {
+    Task { @MainActor in
+      switch self.mReceivingStateReportPhase {
+      case .signaling :
+        self.mReceivingStateReportPhase = .continueSignaling
+      case .continueSignaling :
+        ()
+      case .off :
+        self.mReceivingStateReport = true
+        self.mReceivingStateReportPhase = .signaling
+        self.mReceivingReportTimer = Timer.scheduledTimer (withTimeInterval: 0.125,
+                                                           repeats: false) { [weak self] _ in
+          Task { @MainActor in
+            self?.mReceivingStateReport = false
+            self?.mReceivingReportTimer = Timer.scheduledTimer (withTimeInterval: 0.125,
+                                                                repeats: false) { [weak self] _ in
+              Task { @MainActor in
+                self?.mReceivingReportTimer = nil
+                if let state = self?.mReceivingStateReportPhase, state == .continueSignaling {
+                  self?.mReceivingStateReportPhase = .off
+                  self?.reportReceivingState ()
+                }else{
+                  self?.mReceivingStateReportPhase = .off
+                }
               }
             }
           }
@@ -127,13 +145,6 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
       }
     }
   }
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  //MARK: Console
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-  public var mConsoleLogIsEnabled = false
-  public var mConsoleAttributedString = AttributedString ()
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //MARK: Open port
@@ -242,7 +253,7 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
   //MARK: Close port
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  @MainActor func closePort (withMessage inMessage : String?) {
+  @MainActor public func closePort (withMessage inMessage : String?) {
     self.title = ""
     self.isConnected = false
     if self.mFileDescriptor.withLock ({ $0 }) != nil {
@@ -257,8 +268,64 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
   //MARK: Console
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  public func clearConsole () {
-    self.mConsoleAttributedString = AttributedString ()
+  private struct ConsoleState {
+    var mInternalConsoleAttributedString = AttributedString ()
+    var mConsoleRefreshTimer : Timer? = nil
+    var mConsoleAttributedString = AttributedString ()
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  private let mConsoleState = Mutex <ConsoleState> (ConsoleState ())
+
+  private var mConsoleAttributedString = AttributedString ()
+  public var consoleAttributedString : AttributedString  { self.mConsoleAttributedString }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  public var mConsoleLogIsEnabled = false {
+    didSet {
+      self.mReceivedDataHandler.withLock {
+        $0.mConsoleLogIsEnabled = self.mConsoleLogIsEnabled
+      }
+    }
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  nonisolated func appendToConsoleAttributedString (_ inAT : AttributedString) {
+    self.mConsoleState.withLock { state in
+      state.mInternalConsoleAttributedString.append (inAT)
+      if state.mConsoleRefreshTimer == nil {
+        let timer = Timer (timeInterval: 0.5, repeats: false) { _ in
+          self.consoleTimerDidFire ()
+        }
+        state.mConsoleRefreshTimer = timer
+        RunLoop.main.add (timer, forMode: .common)
+      }
+    }
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  nonisolated func consoleTimerDidFire () {
+    self.mConsoleState.withLock { state in
+      state.mConsoleRefreshTimer?.invalidate ()
+      state.mConsoleRefreshTimer = nil
+      let newValue = state.mInternalConsoleAttributedString
+      state.mConsoleAttributedString = newValue
+      Task { @MainActor in self.mConsoleAttributedString = newValue }
+    }
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  @MainActor public func clearConsole () {
+    self.mConsoleState.withLock {
+      $0.mConsoleRefreshTimer = nil
+      $0.mInternalConsoleAttributedString = AttributedString ()
+      $0.mConsoleAttributedString = AttributedString ()
+    }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
