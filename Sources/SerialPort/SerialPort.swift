@@ -8,8 +8,8 @@ import Synchronization
 
 //--------------------------------------------------------------------------------------------------
 
-public let kReceiveColor = Color.green.mix (with: .black, by: 0.25)
-public let kSendColor = Color.red
+let kReceiveColor = Color.green.mix (with: .black, by: 0.25)
+let kSendColor = Color.red
 let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
 
 //--------------------------------------------------------------------------------------------------
@@ -57,7 +57,10 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
 
   private let mSendingState = Mutex <SendingState> (SendingState ())
   private var mSendingStateString = ""
-  public var sendingStateString : String { self.mSendingStateString }
+
+  public var sendingStateView : some View {
+    Text (self.mSendingStateString).foregroundStyle (Color (kSendColor))
+  }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -103,7 +106,10 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
 
   private let mReceivingState = Mutex <ReceivingState> (ReceivingState ())
   private var mReceivingStateString = ""
-  public var receivingStateString : String { self.mReceivingStateString }
+
+  public var receivingStateView : some View {
+    Text (self.mReceivingStateString).foregroundStyle (Color (kReceiveColor))
+  }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 

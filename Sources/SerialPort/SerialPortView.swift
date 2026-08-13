@@ -68,9 +68,8 @@ public struct SerialPortView : View {
       if !self.mSerialPort.errorString.isEmpty {
         Text (self.mSerialPort.errorString).bold ().foregroundStyle (Color.red)
       }
-      Text (self.mSerialPort.sendingStateString).foregroundStyle (Color (kSendColor))
-      Text (self.mSerialPort.receivingStateString).foregroundStyle (Color (kReceiveColor))
-//      .hiddenWhen (!self.mSerialPort.mReceivingStateReport)
+      self.mSerialPort.sendingStateView
+      self.mSerialPort.receivingStateView
       Spacer ()
       Button ("Disconnect") { self.mSerialPort.closePort (withMessage: nil) }
       .disabled (!self.mSerialPort.isConnected)
@@ -134,17 +133,17 @@ public struct SerialPortView : View {
       AppIconView (title: "Port settings")
       Form {
         Picker ("Baud Rate", selection: self.$mTemporaryPortBaudRate) {
-          ForEach (SerialPort.BaudRate.allCases, id:\.self) {
+          ForEach (SerialPort.BaudRate.allCases, id: \.self) {
             Text ($0.title).tag ($0)
           }
         }.disabled (self.mSerialPort.isConnected)
         Picker ("Parity", selection: self.$mTemporaryPortParity) {
-          ForEach (SerialPort.Parity.allCases, id:\.self) {
+          ForEach (SerialPort.Parity.allCases, id: \.self) {
             Text ($0.title).tag ($0)
           }
         }.disabled (self.mSerialPort.isConnected)
         Picker ("Stop bits", selection: self.$mTemporaryPortStopBits) {
-          ForEach (SerialPort.StopBits.allCases, id:\.self) {
+          ForEach (SerialPort.StopBits.allCases, id: \.self) {
             Text ($0.title).tag ($0)
           }
         }.disabled (self.mSerialPort.isConnected)

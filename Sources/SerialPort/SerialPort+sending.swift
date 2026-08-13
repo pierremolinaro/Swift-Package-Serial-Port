@@ -47,7 +47,6 @@ extension SerialPort {
   public nonisolated func sendData (_ inData : Data) {
 //    enterTracing ("send.data")
     if let fd = self.mFileDescriptor.withLock ( { $0 } ) {
-//      _ = unsafe inData.withUnsafeBytes { unsafe Darwin.write (fd, $0.baseAddress, inData.count) }
       var data = inData
       var sent = 0
       var ok = true

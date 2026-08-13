@@ -53,8 +53,8 @@ extension SerialPort {
     let bytesRead = unsafe Darwin.read (inFileDescriptor, &buffer, buffer.count)
     let data = (bytesRead > 0) ? Data (buffer.prefix (bytesRead)) : Data ()
   //--- Handle data
-    if data.isEmpty {
-//      Task (name: "handle.received.line") { await self.mReceiveHandler? ([]) } // Close
+    if data.isEmpty { // IMPORTANT : ceci permet de détecter une fermeture intempestive
+      Task { @MainActor in self.closePort (withMessage: "Disconnected") }
     }else{
       self.mReceivedDataHandler.withLock {
         $0.mReceivedData += data
