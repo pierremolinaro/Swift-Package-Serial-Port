@@ -62,16 +62,15 @@ public struct SerialPortView : View {
           self.mPresentingPortConnectionProgress = true
         }.keyboardShortcut (.defaultAction)
       }
-      Text ("S").foregroundStyle (Color (kSendColor))
-      .hiddenWhen (!self.mSerialPort.mSendingStateReport)
-      Text ("R").foregroundStyle (Color (kReceiveColor))
-      .hiddenWhen (!self.mSerialPort.mReceivingStateReport)
       if !self.mSerialPort.title.isEmpty {
         Text (self.mSerialPort.title).italic ()
       }
       if !self.mSerialPort.errorString.isEmpty {
         Text (self.mSerialPort.errorString).bold ().foregroundStyle (Color.red)
       }
+      Text (self.mSerialPort.sendingStateString).foregroundStyle (Color (kSendColor))
+      Text (self.mSerialPort.receivingStateString).foregroundStyle (Color (kReceiveColor))
+//      .hiddenWhen (!self.mSerialPort.mReceivingStateReport)
       Spacer ()
       Button ("Disconnect") { self.mSerialPort.closePort (withMessage: nil) }
       .disabled (!self.mSerialPort.isConnected)

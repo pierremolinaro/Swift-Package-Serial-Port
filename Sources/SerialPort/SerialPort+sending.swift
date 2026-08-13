@@ -24,7 +24,7 @@ extension SerialPort {
             sent += n
           }
         }
-        self.reportSendingState ()
+        self.reportSendingState (data.count)
         let consoleLogIsEnabled = self.mReceivedDataHandler.withLock { $0.mConsoleLogIsEnabled }
         if consoleLogIsEnabled {
           var attributeContainer = AttributeContainer ()
@@ -47,8 +47,19 @@ extension SerialPort {
   public nonisolated func sendData (_ inData : Data) {
 //    enterTracing ("send.data")
     if let fd = self.mFileDescriptor.withLock ( { $0 } ) {
-      _ = unsafe inData.withUnsafeBytes { unsafe Darwin.write (fd, $0.baseAddress, inData.count) }
-      self.reportSendingState ()
+//      _ = unsafe inData.withUnsafeBytes { unsafe Darwin.write (fd, $0.baseAddress, inData.count) }
+      var data = inData
+      var sent = 0
+      var ok = true
+      while sent < data.count, ok {
+        data.removeFirst (sent)
+        _ = unsafe data.withUnsafeBytes {
+          let n = unsafe Darwin.write (fd, $0.baseAddress, $0.count)
+          ok = n > 0
+          sent += n
+        }
+      }
+      self.reportSendingState (inData.count)
       let consoleLogIsEnabled = self.mReceivedDataHandler.withLock { $0.mConsoleLogIsEnabled }
       if consoleLogIsEnabled {
         var s = ""

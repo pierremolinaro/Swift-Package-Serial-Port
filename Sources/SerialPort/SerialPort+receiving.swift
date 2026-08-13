@@ -59,7 +59,7 @@ extension SerialPort {
       self.mReceivedDataHandler.withLock {
         $0.mReceivedData += data
         if let s = String (data: $0.mReceivedData, encoding: .utf8) {
-          self.reportReceivingState ()
+          self.reportReceivingState ($0.mReceivedData.count)
           if $0.mConsoleLogIsEnabled {
             self.updateUIOnReceiving (string: s)
           }
@@ -68,7 +68,7 @@ extension SerialPort {
           let unixString = $0.mReceivedStringFragment.replacingOccurrences (of: "\r\n", with: "\n")
           var lines = unixString.components (separatedBy: "\n")
           $0.mReceivedStringFragment = lines.removeLast ()
-          $0.mReceivedLinesBuffer += lines
+          self.handleReceivedLines (lines, &$0.mReceivedLinesBuffer)
         }
       }
     }
@@ -104,7 +104,7 @@ extension SerialPort {
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  public nonisolated func getReceivedLine () async -> String? {
+  nonisolated public func getReceivedLine () async -> String? {
     let start = ContinuousClock.now
     while true {
       if let line = self.extractFirstReceivedLine () {

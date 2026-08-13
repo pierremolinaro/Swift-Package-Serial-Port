@@ -8,8 +8,8 @@ import Synchronization
 
 //--------------------------------------------------------------------------------------------------
 
-let kReceiveColor = Color.green.mix (with: .black, by: 0.25)
-let kSendColor = Color.red
+public let kReceiveColor = Color.green.mix (with: .black, by: 0.25)
+public let kSendColor = Color.red
 let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
 
 //--------------------------------------------------------------------------------------------------
@@ -29,7 +29,7 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public var isConnected : Bool = false
-  var isReady : Bool { self.isConnected }
+  open var isReady : Bool { self.isConnected }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -48,35 +48,24 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
   //MARK: Sending State Report
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  private enum ReportPhase { case off, signaling, continueSignaling }
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
   private struct SendingState {
     var mSendingReportTimer : Timer? = nil
-    var mSendingStateReportPhase = ReportPhase.off
-    var mWaiting = false
+    var mSendingByteCount = 0
   }
   
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   private let mSendingState = Mutex <SendingState> (SendingState ())
-  private(set) var mSendingStateReport = false
+  private var mSendingStateString = ""
+  public var sendingStateString : String { self.mSendingStateString }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  nonisolated func reportSendingState () {
+  nonisolated func reportSendingState (_ inByteCount : Int) {
     self.mSendingState.withLock {
-      switch $0.mSendingStateReportPhase {
-      case .signaling :
-        $0.mSendingStateReportPhase = .continueSignaling
-      case .continueSignaling :
-        ()
-      case .off :
-        Task { @MainActor in self.mSendingStateReport = true }
-        $0.mSendingStateReportPhase = .signaling
-        $0.mWaiting = false
-        let timer = Timer (timeInterval: 0.125, repeats: true) { _ in
+      $0.mSendingByteCount += inByteCount
+      if $0.mSendingReportTimer == nil {
+        let timer = Timer (timeInterval: 1.0, repeats: true) { _ in
           self.sendingReportTimerDidFire ()
         }
         $0.mSendingReportTimer = timer
@@ -89,17 +78,14 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
 
   nonisolated func sendingReportTimerDidFire () {
     self.mSendingState.withLock {
-      if $0.mWaiting {
+      if $0.mSendingByteCount == 0 {
+        Task { @MainActor in self.mSendingStateString = "" }
         $0.mSendingReportTimer?.invalidate ()
         $0.mSendingReportTimer = nil
-        let state = $0.mSendingStateReportPhase
-        $0.mSendingStateReportPhase = .off
-        if state == .continueSignaling {
-          Task { self.reportSendingState () }
-        }
       }else{
-        $0.mWaiting = true
-        Task { @MainActor in self.mSendingStateReport = false }
+        let str = "S \($0.mSendingByteCount) bytes/s"
+        Task { @MainActor in self.mSendingStateString = str }
+        $0.mSendingByteCount = 0
       }
     }
   }
@@ -108,52 +94,96 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
   //MARK: Receiving State Report
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  private(set) var mReceivingStateReport = false
-  private var mReceivingStateReportPhase = ReportPhase.off
-  private var mReceivingReportTimer : Timer? = nil
+  private struct ReceivingState {
+    var mReceivingReportTimer : Timer? = nil
+    var mReceivedByteCount = 0
+  }
+  
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  private let mReceivingState = Mutex <ReceivingState> (ReceivingState ())
+  private var mReceivingStateString = ""
+  public var receivingStateString : String { self.mReceivingStateString }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  nonisolated func reportReceivingState () {
-    Task { @MainActor in
-      switch self.mReceivingStateReportPhase {
-      case .signaling :
-        self.mReceivingStateReportPhase = .continueSignaling
-      case .continueSignaling :
-        ()
-      case .off :
-        self.mReceivingStateReport = true
-        self.mReceivingStateReportPhase = .signaling
-        self.mReceivingReportTimer = Timer.scheduledTimer (withTimeInterval: 0.125,
-                                                           repeats: false) { [weak self] _ in
-          Task { @MainActor in
-            self?.mReceivingStateReport = false
-            self?.mReceivingReportTimer = Timer.scheduledTimer (withTimeInterval: 0.125,
-                                                                repeats: false) { [weak self] _ in
-              Task { @MainActor in
-                self?.mReceivingReportTimer = nil
-                if let state = self?.mReceivingStateReportPhase, state == .continueSignaling {
-                  self?.mReceivingStateReportPhase = .off
-                  self?.reportReceivingState ()
-                }else{
-                  self?.mReceivingStateReportPhase = .off
-                }
-              }
-            }
-          }
+  nonisolated func reportReceivingState (_ inByteCount : Int) {
+    self.mReceivingState.withLock {
+      $0.mReceivedByteCount += inByteCount
+      if $0.mReceivingReportTimer == nil {
+        let timer = Timer (timeInterval: 1.0, repeats: true) { _ in
+          self.receivingReportTimerDidFire ()
         }
+        $0.mReceivingReportTimer = timer
+        RunLoop.main.add (timer, forMode: .common)
       }
     }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  nonisolated func receivingReportTimerDidFire () {
+    self.mReceivingState.withLock {
+      if $0.mReceivedByteCount == 0 {
+        Task { @MainActor in self.mReceivingStateString = "" }
+        $0.mReceivingReportTimer?.invalidate ()
+        $0.mReceivingReportTimer = nil
+      }else{
+        let str = "R \($0.mReceivedByteCount) bytes/s"
+        Task { @MainActor in self.mReceivingStateString = str }
+        $0.mReceivedByteCount = 0
+      }
+    }
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+//  private(set) var mReceivingStateReport = false
+//  private var mReceivingStateReportPhase = ReportPhase.off
+//  private var mReceivingReportTimer : Timer? = nil
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+//  nonisolated func reportReceivingState (_ inByteCount : Int) {
+//    Task { @MainActor in
+//      switch self.mReceivingStateReportPhase {
+//      case .signaling :
+//        self.mReceivingStateReportPhase = .continueSignaling
+//      case .continueSignaling :
+//        ()
+//      case .off :
+//        self.mReceivingStateReport = true
+//        self.mReceivingStateReportPhase = .signaling
+//        self.mReceivingReportTimer = Timer.scheduledTimer (withTimeInterval: 0.125,
+//                                                           repeats: false) { [weak self] _ in
+//          Task { @MainActor in
+//            self?.mReceivingStateReport = false
+//            self?.mReceivingReportTimer = Timer.scheduledTimer (withTimeInterval: 0.125,
+//                                                                repeats: false) { [weak self] _ in
+//              Task { @MainActor in
+//                self?.mReceivingReportTimer = nil
+//                if let state = self?.mReceivingStateReportPhase, state == .continueSignaling {
+//                  self?.mReceivingStateReportPhase = .off
+//       //           self?.reportReceivingState ()
+//                }else{
+//                  self?.mReceivingStateReportPhase = .off
+//                }
+//              }
+//            }
+//          }
+//        }
+//      }
+//    }
+//  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //MARK: Open port
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  @MainActor func openPort (withDescription inDescription : SerialPortDescription,
-                            baudRate inBaudRate : BaudRate,
-                            parity inParity : Parity,
-                            stopBits inStopBits : StopBits) {
+  @MainActor open func openPort (withDescription inDescription : SerialPortDescription,
+                                   baudRate inBaudRate : BaudRate,
+                                   parity inParity : Parity,
+                                   stopBits inStopBits : StopBits) {
     self.mPath = inDescription.path
     self.title = inDescription.title
     self.errorString = ""
@@ -253,7 +283,7 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
   //MARK: Close port
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  @MainActor public func closePort (withMessage inMessage : String?) {
+  @MainActor open func closePort (withMessage inMessage : String?) {
     self.title = ""
     self.isConnected = false
     if self.mFileDescriptor.withLock ({ $0 }) != nil {
@@ -326,6 +356,14 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
       $0.mInternalConsoleAttributedString = AttributedString ()
       $0.mConsoleAttributedString = AttributedString ()
     }
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // Override this function for intercepting received lines
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  nonisolated open func handleReceivedLines (_ inLines : [String], _ ioBuffer : inout [String]) {
+    ioBuffer += inLines
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
