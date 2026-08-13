@@ -304,18 +304,19 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
   //MARK: Console
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  private struct ConsoleState {
-    var mInternalConsoleAttributedString = AttributedString ()
-    var mConsoleRefreshTimer : Timer? = nil
-    var mConsoleAttributedString = AttributedString ()
-  }
+  public let mConsoleBuffer = AttributedStringBuffer (flushInterval: 0.5)
+//  private struct ConsoleState {
+//    var mInternalConsoleAttributedString = AttributedString ()
+//    var mConsoleRefreshTimer : Timer? = nil
+//    var mConsoleAttributedString = AttributedString ()
+//  }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  private let mConsoleState = Mutex <ConsoleState> (ConsoleState ())
-
-  private var mConsoleAttributedString = AttributedString ()
-  public var consoleAttributedString : AttributedString  { self.mConsoleAttributedString }
+//  private let mConsoleState = Mutex <ConsoleState> (ConsoleState ())
+//
+//  private var mConsoleAttributedString = AttributedString ()
+//  public var consoleAttributedString : AttributedString  { self.mConsoleAttributedString }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -329,39 +330,40 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  nonisolated func appendToConsoleAttributedString (_ inAT : AttributedString) {
-    self.mConsoleState.withLock { state in
-      state.mInternalConsoleAttributedString.append (inAT)
-      if state.mConsoleRefreshTimer == nil {
-        let timer = Timer (timeInterval: 0.5, repeats: false) { _ in
-          self.consoleTimerDidFire ()
-        }
-        state.mConsoleRefreshTimer = timer
-        RunLoop.main.add (timer, forMode: .common)
-      }
-    }
-  }
+//  nonisolated func appendToConsoleAttributedString (_ inAT : AttributedString) {
+//    self.mConsoleState.withLock { state in
+//      state.mInternalConsoleAttributedString.append (inAT)
+//      if state.mConsoleRefreshTimer == nil {
+//        let timer = Timer (timeInterval: 0.5, repeats: false) { _ in
+//          self.consoleTimerDidFire ()
+//        }
+//        state.mConsoleRefreshTimer = timer
+//        RunLoop.main.add (timer, forMode: .common)
+//      }
+//    }
+//  }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  nonisolated func consoleTimerDidFire () {
-    self.mConsoleState.withLock { state in
-      state.mConsoleRefreshTimer?.invalidate ()
-      state.mConsoleRefreshTimer = nil
-      let newValue = state.mInternalConsoleAttributedString
-      state.mConsoleAttributedString = newValue
-      Task { @MainActor in self.mConsoleAttributedString = newValue }
-    }
-  }
+//  nonisolated func consoleTimerDidFire () {
+//    self.mConsoleState.withLock { state in
+//      state.mConsoleRefreshTimer?.invalidate ()
+//      state.mConsoleRefreshTimer = nil
+//      let newValue = state.mInternalConsoleAttributedString
+//      state.mConsoleAttributedString = newValue
+//      Task { @MainActor in self.mConsoleAttributedString = newValue }
+//    }
+//  }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   @MainActor public func clearConsole () {
-    self.mConsoleState.withLock {
-      $0.mConsoleRefreshTimer = nil
-      $0.mInternalConsoleAttributedString = AttributedString ()
-      $0.mConsoleAttributedString = AttributedString ()
-    }
+    self.mConsoleBuffer.clear()
+//    self.mConsoleState.withLock {
+//      $0.mConsoleRefreshTimer = nil
+//      $0.mInternalConsoleAttributedString = AttributedString ()
+//      $0.mConsoleAttributedString = AttributedString ()
+//    }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

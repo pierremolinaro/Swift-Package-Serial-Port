@@ -27,11 +27,12 @@ extension SerialPort {
         self.reportSendingState (data.count)
         let consoleLogIsEnabled = self.mReceivedDataHandler.withLock { $0.mConsoleLogIsEnabled }
         if consoleLogIsEnabled {
-          var attributeContainer = AttributeContainer ()
-          attributeContainer.font = Font.custom ("Menlo", size: 12)
-          attributeContainer.foregroundColor = kSendColor
-          let at = AttributedString (inString, attributes: attributeContainer)
-          self.appendToConsoleAttributedString (at)
+//          var attributeContainer = AttributeContainer ()
+//          attributeContainer.font = Font.custom ("Menlo", size: 12)
+//          attributeContainer.foregroundColor = kSendColor
+//          let at = AttributedString (inString, attributes: attributeContainer)
+          self.mConsoleBuffer.append (inString)
+//          self.appendToConsoleAttributedString (at)
         }
       }
     }else{
@@ -66,12 +67,13 @@ extension SerialPort {
           s += unsafe String (format: "<0x%02X>", byte)
         }
         s += "\n"
-        var attributeContainer = AttributeContainer ()
-        attributeContainer.font = Font.custom ("Menlo", size: 12)
-        attributeContainer.foregroundColor = kSendColor
-        attributeContainer.backgroundColor = kCtrlCharacterBackColor
-        let at = AttributedString (s, attributes: attributeContainer)
-        self.appendToConsoleAttributedString (at)
+//        var attributeContainer = AttributeContainer ()
+//        attributeContainer.font = Font.custom ("Menlo", size: 12)
+//        attributeContainer.foregroundColor = kSendColor
+//        attributeContainer.backgroundColor = kCtrlCharacterBackColor
+//        let at = AttributedString (s, attributes: attributeContainer)
+        self.mConsoleBuffer.append (s)
+//        self.appendToConsoleAttributedString (at)
       }
     }
 //    exitTracing ("send.data")

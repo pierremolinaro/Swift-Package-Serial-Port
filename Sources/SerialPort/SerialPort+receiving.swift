@@ -99,7 +99,9 @@ extension SerialPort {
     for at in atStringArray {
       attributedString.append (at)
     }
-    self.appendToConsoleAttributedString (attributedString)
+    self.mConsoleBuffer.append (inString)
+//    self.mConsoleBuffer.append (attributedString: attributedString)
+//    self.appendToConsoleAttributedString (attributedString)
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
