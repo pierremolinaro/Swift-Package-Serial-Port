@@ -28,8 +28,8 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  public var isConnected : Bool = false
-  open var isReady : Bool { self.isConnected }
+  @MainActor private var mIsSerialPortConnected : Bool = false
+  @MainActor public var isSerialPortConnected : Bool  { self.mIsSerialPortConnected }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -211,7 +211,7 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
           stopBits: inStopBits,
           fileDescriptor: fileDescriptor
         )
-        self.isConnected = true
+        self.mIsSerialPortConnected = true
         self.setupReceive (fileDescriptor)
       }else{
         self.mFileDescriptor.withLock { $0 = nil }
@@ -291,7 +291,7 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
 
   @MainActor open func closePort (withMessage inMessage : String?) {
     self.title = ""
-    self.isConnected = false
+    self.mIsSerialPortConnected = false
     if self.mFileDescriptor.withLock ({ $0 }) != nil {
       self.mFileDescriptor.withLock { $0 = nil }
       if let s = inMessage {

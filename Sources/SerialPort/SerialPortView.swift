@@ -9,6 +9,7 @@ public struct SerialPortView : View {
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   @State private var mSerialPort : SerialPort
+  private let mAuxiliaryLeftView : any View?
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -39,28 +40,35 @@ public struct SerialPortView : View {
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  public init (serialPort inSerialPort : SerialPort) {
+  public init (serialPort inSerialPort : SerialPort,
+               auxiliaryLeftView inAuxiliaryLeftView : any View? = nil) {
     self.mSerialPort = inSerialPort
+    self.mAuxiliaryLeftView = inAuxiliaryLeftView
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public var body: some View {
     HStack {
-      Button ("", systemImage: "gearshape.fill") { self.mPresentingPortSettingDialog = true }
-      .labelStyle (.iconOnly)
-      Button ("Connect…") { self.mPresentingPortSelectionDialog = true }
-      .disabled (self.mSerialPort.isConnected)
-      if !self.mSerialPort.isConnected, self.mSerialPortWatcher.mExposedSerialPorts.count == 1 {
-        Button (self.mSerialPortWatcher.mExposedSerialPorts [0].title) {
-          self.mSerialPort.openPort (
-            withDescription: self.mSerialPortWatcher.mExposedSerialPorts [0],
-            baudRate: self.mPortBaudRate,
-            parity: self.mPortParity,
-            stopBits: self.mPortStopBits
-          )
-          self.mPresentingPortConnectionProgress = true
-        }.keyboardShortcut (.defaultAction)
+      if let auxiliaryLeftView = self.mAuxiliaryLeftView {
+        AnyView (auxiliaryLeftView)
+      }
+      if !self.mSerialPort.isSerialPortConnected {
+        Button ("", systemImage: "gearshape.fill") { self.mPresentingPortSettingDialog = true }
+        .labelStyle (.iconOnly)
+        Button ("Connect…") { self.mPresentingPortSelectionDialog = true }
+        // .disabled (self.mSerialPort.isSerialPortConnected)
+        if self.mSerialPortWatcher.mExposedSerialPorts.count == 1 {
+          Button (self.mSerialPortWatcher.mExposedSerialPorts [0].title) {
+            self.mSerialPort.openPort (
+              withDescription: self.mSerialPortWatcher.mExposedSerialPorts [0],
+              baudRate: self.mPortBaudRate,
+              parity: self.mPortParity,
+              stopBits: self.mPortStopBits
+            )
+            self.mPresentingPortConnectionProgress = true
+          }.keyboardShortcut (.defaultAction)
+        }
       }
       if !self.mSerialPort.title.isEmpty {
         Text (self.mSerialPort.title).italic ()
@@ -72,7 +80,7 @@ public struct SerialPortView : View {
       self.mSerialPort.receivingStateView
       Spacer ()
       Button ("Disconnect") { self.mSerialPort.closePort (withMessage: nil) }
-      .disabled (!self.mSerialPort.isConnected)
+      .disabled (!self.mSerialPort.isSerialPortConnected)
     }
     .padding (4)
     .sheet (isPresented: self.$mPresentingPortSelectionDialog) { self.portSelectionDialog () }
@@ -136,17 +144,17 @@ public struct SerialPortView : View {
           ForEach (SerialPort.BaudRate.allCases, id: \.self) {
             Text ($0.title).tag ($0)
           }
-        }.disabled (self.mSerialPort.isConnected)
+        }.disabled (self.mSerialPort.isSerialPortConnected)
         Picker ("Parity", selection: self.$mTemporaryPortParity) {
           ForEach (SerialPort.Parity.allCases, id: \.self) {
             Text ($0.title).tag ($0)
           }
-        }.disabled (self.mSerialPort.isConnected)
+        }.disabled (self.mSerialPort.isSerialPortConnected)
         Picker ("Stop bits", selection: self.$mTemporaryPortStopBits) {
           ForEach (SerialPort.StopBits.allCases, id: \.self) {
             Text ($0.title).tag ($0)
           }
-        }.disabled (self.mSerialPort.isConnected)
+        }.disabled (self.mSerialPort.isSerialPortConnected)
       }
       HStack {
         Button ("Cancel") { self.mPresentingPortSettingDialog = false }
@@ -160,7 +168,7 @@ public struct SerialPortView : View {
         }
         .keyboardShortcut (.defaultAction)
         .disabled (
-          self.mSerialPort.isConnected
+          self.mSerialPort.isSerialPortConnected
           ||
            ((self.mPortBaudRate == self.mTemporaryPortBaudRate)
             && (self.mPortParity == self.mTemporaryPortParity)
@@ -181,7 +189,7 @@ public struct SerialPortView : View {
 
   private func portConnectionProgress ()  -> some View {
     VStack (spacing: 16) {
-      AppIconView (title: self.mSerialPort.isConnected ? "Connecting…" : "Disconnected")
+      AppIconView (title: self.mSerialPort.isSerialPortConnected ? "Connecting…" : "Disconnected")
       Button ("Cancel") {
         self.mPresentingPortConnectionProgress = false
         self.mSerialPort.closePort (withMessage: "User cancelled connection")
@@ -189,7 +197,7 @@ public struct SerialPortView : View {
       .customCancelActionDecoration ()
     }
     .padding ()
-    .onChange (of: self.mSerialPort.isReady, initial: true) { (old, isReady) in
+    .onChange (of: self.mSerialPort.isSerialPortConnected, initial: true) { (old, isReady) in
       if isReady {
         self.mPresentingPortConnectionProgress = false
       }
