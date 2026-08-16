@@ -8,8 +8,8 @@ import Synchronization
 
 //--------------------------------------------------------------------------------------------------
 
-let kReceiveColor = Color.green.mix (with: .black, by: 0.25)
-let kSendColor = Color.red
+let kSendColor = Color.green.mix (with: .black, by: 0.25)
+let kReceiveColor = Color.red
 let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
 
 //--------------------------------------------------------------------------------------------------
@@ -86,7 +86,7 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
         $0.mSendingReportTimer?.invalidate ()
         $0.mSendingReportTimer = nil
       }else{
-        let str = "S \($0.mSendingByteCount) bytes/s"
+        let str = "Tx: \($0.mSendingByteCount) bytes/s"
         Task { @MainActor in self.mSendingStateString = str }
         $0.mSendingByteCount = 0
       }
@@ -135,7 +135,7 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
         $0.mReceivingReportTimer?.invalidate ()
         $0.mReceivingReportTimer = nil
       }else{
-        let str = "R \($0.mReceivedByteCount) bytes/s"
+        let str = "Rx: \($0.mReceivedByteCount) bytes/s"
         Task { @MainActor in self.mReceivingStateString = str }
         $0.mReceivedByteCount = 0
       }
@@ -144,52 +144,22 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-//  private(set) var mReceivingStateReport = false
-//  private var mReceivingStateReportPhase = ReportPhase.off
-//  private var mReceivingReportTimer : Timer? = nil
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-//  nonisolated func reportReceivingState (_ inByteCount : Int) {
-//    Task { @MainActor in
-//      switch self.mReceivingStateReportPhase {
-//      case .signaling :
-//        self.mReceivingStateReportPhase = .continueSignaling
-//      case .continueSignaling :
-//        ()
-//      case .off :
-//        self.mReceivingStateReport = true
-//        self.mReceivingStateReportPhase = .signaling
-//        self.mReceivingReportTimer = Timer.scheduledTimer (withTimeInterval: 0.125,
-//                                                           repeats: false) { [weak self] _ in
-//          Task { @MainActor in
-//            self?.mReceivingStateReport = false
-//            self?.mReceivingReportTimer = Timer.scheduledTimer (withTimeInterval: 0.125,
-//                                                                repeats: false) { [weak self] _ in
-//              Task { @MainActor in
-//                self?.mReceivingReportTimer = nil
-//                if let state = self?.mReceivingStateReportPhase, state == .continueSignaling {
-//                  self?.mReceivingStateReportPhase = .off
-//       //           self?.reportReceivingState ()
-//                }else{
-//                  self?.mReceivingStateReportPhase = .off
-//                }
-//              }
-//            }
-//          }
-//        }
-//      }
-//    }
-//  }
+  open nonisolated func removeAllReceivedDatas () {
+    self.mReceivedDataHandler.withLock {
+      $0.mReceivedData.removeAll ()
+      $0.mReceivedStringFragment = ""
+      $0.mReceivedLinesBuffer.removeAll ()
+    }
+  }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //MARK: Open port
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   @MainActor open func openPort (withDescription inDescription : SerialPortDescription,
-                                   baudRate inBaudRate : BaudRate,
-                                   parity inParity : Parity,
-                                   stopBits inStopBits : StopBits) {
+                                 baudRate inBaudRate : BaudRate,
+                                 parity inParity : Parity,
+                                 stopBits inStopBits : StopBits) {
     self.mPath = inDescription.path
     self.title = inDescription.title
     self.errorString = ""

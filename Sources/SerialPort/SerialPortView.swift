@@ -70,15 +70,15 @@ public struct SerialPortView : View {
           }.keyboardShortcut (.defaultAction)
         }
       }
-      if !self.mSerialPort.title.isEmpty {
-        Text (self.mSerialPort.title).italic ()
-      }
       if !self.mSerialPort.errorString.isEmpty {
         Text (self.mSerialPort.errorString).bold ().foregroundStyle (Color.red)
       }
       self.mSerialPort.sendingStateView
       self.mSerialPort.receivingStateView
       Spacer ()
+      if !self.mSerialPort.title.isEmpty {
+        Text (self.mSerialPort.title).italic ()
+      }
       Button ("Disconnect") { self.mSerialPort.closePort (withMessage: nil) }
       .disabled (!self.mSerialPort.isSerialPortConnected)
     }

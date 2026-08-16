@@ -81,13 +81,6 @@ import Synchronization
     Task { @MainActor in
       self.cleared.send ()
     }
-
-//      lock.lock()
-//      pending.removeAll()
-//      lock.unlock()
-//      DispatchQueue.main.async { [weak self] in
-//          self?.cleared.send()
-//      }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

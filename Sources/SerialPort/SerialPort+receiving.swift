@@ -132,16 +132,6 @@ extension SerialPort {
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  public nonisolated func removeAllReceivedDatas () {
-    self.mReceivedDataHandler.withLock {
-      $0.mReceivedData.removeAll ()
-      $0.mReceivedStringFragment = ""
-      $0.mReceivedLinesBuffer.removeAll ()
-    }
-  }
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
 }
 
 //--------------------------------------------------------------------------------------------------
