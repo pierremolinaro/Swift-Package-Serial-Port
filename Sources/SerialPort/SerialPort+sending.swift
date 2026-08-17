@@ -11,72 +11,63 @@ extension SerialPort {
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public nonisolated func sendString (_ inString : String) {
-//    enterTracing ("send.string")
-    if var data = inString.data (using: String.Encoding.utf8) {
-      if let fd = self.mFileDescriptor.withLock ( { $0 } ) {
-        var sent = 0
-        var ok = true
-        while sent < data.count, ok {
-          data.removeFirst (sent)
-          _ = unsafe data.withUnsafeBytes {
-            let n = unsafe Darwin.write (fd, $0.baseAddress, $0.count)
-            ok = n > 0
-            sent += n
-          }
-        }
-        self.reportSendingState (data.count)
-        let consoleLogIsEnabled = self.mReceivedDataHandler.withLock { $0.mConsoleLogIsEnabled }
-        if consoleLogIsEnabled {
+    let data = inString.data (using: String.Encoding.utf8)!
+    self.mSendTaskBuffer.withLock( { $0 += data } )
+    self.mSendSemaphore.signal ()
+    self.reportSendingState (data.count)
+    let consoleLogIsEnabled = self.mReceivedDataHandler.withLock { $0.mConsoleLogIsEnabled }
+    if consoleLogIsEnabled {
 //          var attributeContainer = AttributeContainer ()
 //          attributeContainer.font = Font.custom ("Menlo", size: 12)
 //          attributeContainer.foregroundColor = kSendColor
 //          let at = AttributedString (inString, attributes: attributeContainer)
-          self.mConsoleBuffer.append (inString)
-//          self.appendToConsoleAttributedString (at)
-        }
-      }
-    }else{
-      Task { @MainActor in
-        self.closePort (withMessage: "Send string is not UTF8")
-      }
+      let e = ConsoleTextBuffer.Element (string: inString, foregroundColor: kSendColor, backgroundColor: .clear)
+      self.mConsoleBuffer.append (e)
     }
-//    exitTracing ("send.string")
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public nonisolated func sendData (_ inData : Data) {
-//    enterTracing ("send.data")
-    if let fd = self.mFileDescriptor.withLock ( { $0 } ) {
-      var data = inData
-      var sent = 0
-      var ok = true
-      while sent < data.count, ok {
-        data.removeFirst (sent)
-        _ = unsafe data.withUnsafeBytes {
-          let n = unsafe Darwin.write (fd, $0.baseAddress, $0.count)
-          ok = n > 0
-          sent += n
-        }
+    self.mSendTaskBuffer.withLock( { $0 += inData } )
+    self.mSendSemaphore.signal ()
+    self.reportSendingState (inData.count)
+    let consoleLogIsEnabled = self.mReceivedDataHandler.withLock { $0.mConsoleLogIsEnabled }
+    if consoleLogIsEnabled {
+      var s = ""
+      for byte in inData {
+        s += unsafe String (format: "<0x%02X>", byte)
       }
-      self.reportSendingState (inData.count)
-      let consoleLogIsEnabled = self.mReceivedDataHandler.withLock { $0.mConsoleLogIsEnabled }
-      if consoleLogIsEnabled {
-        var s = ""
-        for byte in inData {
-          s += unsafe String (format: "<0x%02X>", byte)
-        }
-        s += "\n"
-//        var attributeContainer = AttributeContainer ()
-//        attributeContainer.font = Font.custom ("Menlo", size: 12)
-//        attributeContainer.foregroundColor = kSendColor
-//        attributeContainer.backgroundColor = kCtrlCharacterBackColor
-//        let at = AttributedString (s, attributes: attributeContainer)
-        self.mConsoleBuffer.append (s)
-//        self.appendToConsoleAttributedString (at)
-      }
+      let e = ConsoleTextBuffer.Element (string: s, foregroundColor: kSendColor, backgroundColor: kCtrlCharacterBackColor)
+      self.mConsoleBuffer.append (e)
     }
-//    exitTracing ("send.data")
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  @MainActor func launchSendTask (_ inFileDescriptor : Int32) {
+    self.mSendThread = Thread {
+ //     print ("START")
+      while !self.mSendTaskIsCancelled.withLock ( { $0 } ) {
+        self.mSendSemaphore.wait ()
+//        print ("PASS")
+        if !self.mSendTaskBuffer.withLock( { $0.isEmpty } ) {
+          let data = self.mSendTaskBuffer.withLock( { $0 } )
+          let sent = unsafe data.withUnsafeBytes {
+            return unsafe Darwin.write (inFileDescriptor, $0.baseAddress, $0.count)
+          }
+          self.mSendTaskBuffer.withLock { $0.removeFirst (sent) }
+          if sent < data.count {
+            Task {
+              try! await Task.sleep (nanoseconds: 1_000_000) // 1 ms
+              self.mSendSemaphore.signal ()
+            }
+          }
+        }
+      }
+      print ("SEND THREAD ENDED")
+    }
+    self.mSendThread?.start ()
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

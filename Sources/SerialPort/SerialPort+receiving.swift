@@ -78,30 +78,45 @@ extension SerialPort {
  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   nonisolated private func updateUIOnReceiving (string inString : String) {
-    let atStringArray = inString.unicodeScalars.map { scalar -> AttributedString in
+    var elementArray = [ConsoleTextBuffer.Element] ()
+    var currentString = ""
+    for scalar in inString.unicodeScalars {
       if scalar.isASCII, scalar.value < 0x20, scalar.value != 0x0A, scalar.value != 0x0D {
-        var attributeContainer = AttributeContainer ()
-        attributeContainer.font = Font.custom ("Menlo", size: 12)
-        attributeContainer.foregroundColor = kReceiveColor
-        attributeContainer.backgroundColor = kCtrlCharacterBackColor
-        return AttributedString (
-          unsafe String (format: "<0x%02X>", scalar.value),
-          attributes: attributeContainer
-        )
+        if !currentString.isEmpty {
+          let e = ConsoleTextBuffer.Element (string: currentString, foregroundColor: kReceiveColor, backgroundColor: .clear)
+          elementArray.append (e)
+          currentString.removeAll (keepingCapacity: true)
+        }
+        let s = unsafe String (format: "<0x%02X>", scalar.value)
+        let e = ConsoleTextBuffer.Element (string: s, foregroundColor: kReceiveColor, backgroundColor: kCtrlCharacterBackColor)
+        elementArray.append (e)
+//        var attributeContainer = AttributeContainer ()
+//        attributeContainer.font = Font.custom ("Menlo", size: 12)
+//        attributeContainer.foregroundColor = kReceiveColor
+//        attributeContainer.backgroundColor = kCtrlCharacterBackColor
+//        return AttributedString (
+//          unsafe String (format: "<0x%02X>", scalar.value),
+//          attributes: attributeContainer
+//        )
       }else{
-        var attributeContainer = AttributeContainer ()
-        attributeContainer.font = Font.custom ("Menlo", size: 12)
-        attributeContainer.foregroundColor = kReceiveColor
-        return AttributedString (String (scalar), attributes: attributeContainer)
+        currentString += String (scalar)
+//        var attributeContainer = AttributeContainer ()
+//        attributeContainer.font = Font.custom ("Menlo", size: 12)
+//        attributeContainer.foregroundColor = kReceiveColor
+//        return AttributedString (String (scalar), attributes: attributeContainer)
       }
     }
-    var attributedString = AttributedString ()
-    for at in atStringArray {
-      attributedString.append (at)
+    if !currentString.isEmpty {
+      let e = ConsoleTextBuffer.Element (string: currentString, foregroundColor: kReceiveColor, backgroundColor: .clear)
+      elementArray.append (e)
     }
-    self.mConsoleBuffer.append (inString)
-//    self.mConsoleBuffer.append (attributedString: attributedString)
-//    self.appendToConsoleAttributedString (attributedString)
+//    var attributedString = AttributedString ()
+//    for at in atStringArray {
+//      attributedString.append (at)
+//    }
+//    self.mConsoleBuffer.append (inString)
+//    let e = ConsoleTextBuffer.Element (string: inString, foregroundColor: kReceiveColor, backgroundColor: .clear)
+    self.mConsoleBuffer.append (elementArray)
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

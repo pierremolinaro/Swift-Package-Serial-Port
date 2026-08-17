@@ -8,9 +8,9 @@ import Synchronization
 
 //--------------------------------------------------------------------------------------------------
 
-let kSendColor = Color.green.mix (with: .black, by: 0.25)
-let kReceiveColor = Color.red
-let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
+let kSendColor = NSColor.green.blended (withFraction: 0.25, of: .black)! //.mix (with: .black, by: 0.25)
+let kReceiveColor = NSColor.red
+let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .white)! // .mix (with: .white, by: 0.85)
 
 //--------------------------------------------------------------------------------------------------
 
@@ -181,8 +181,9 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
           stopBits: inStopBits,
           fileDescriptor: fileDescriptor
         )
-        self.mIsSerialPortConnected = true
         self.setupReceive (fileDescriptor)
+        self.launchSendTask (fileDescriptor)
+        self.mIsSerialPortConnected = true
       }else{
         self.mFileDescriptor.withLock { $0 = nil }
         self.title = ""
@@ -261,6 +262,9 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
 
   @MainActor open func closePort (withMessage inMessage : String?) {
     self.title = ""
+    self.mSendTaskIsCancelled.withLock { $0 = true }
+    self.mSendSemaphore.signal ()
+    self.mSendThread = nil
     self.mIsSerialPortConnected = false
     if self.mFileDescriptor.withLock ({ $0 }) != nil {
       self.mFileDescriptor.withLock { $0 = nil }
@@ -274,19 +278,7 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
   //MARK: Console
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  public let mConsoleBuffer = AttributedStringBuffer (flushInterval: 0.5)
-//  private struct ConsoleState {
-//    var mInternalConsoleAttributedString = AttributedString ()
-//    var mConsoleRefreshTimer : Timer? = nil
-//    var mConsoleAttributedString = AttributedString ()
-//  }
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-//  private let mConsoleState = Mutex <ConsoleState> (ConsoleState ())
-//
-//  private var mConsoleAttributedString = AttributedString ()
-//  public var consoleAttributedString : AttributedString  { self.mConsoleAttributedString }
+  public let mConsoleBuffer = ConsoleTextBuffer (flushInterval: 0.5)
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -300,40 +292,8 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-//  nonisolated func appendToConsoleAttributedString (_ inAT : AttributedString) {
-//    self.mConsoleState.withLock { state in
-//      state.mInternalConsoleAttributedString.append (inAT)
-//      if state.mConsoleRefreshTimer == nil {
-//        let timer = Timer (timeInterval: 0.5, repeats: false) { _ in
-//          self.consoleTimerDidFire ()
-//        }
-//        state.mConsoleRefreshTimer = timer
-//        RunLoop.main.add (timer, forMode: .common)
-//      }
-//    }
-//  }
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-//  nonisolated func consoleTimerDidFire () {
-//    self.mConsoleState.withLock { state in
-//      state.mConsoleRefreshTimer?.invalidate ()
-//      state.mConsoleRefreshTimer = nil
-//      let newValue = state.mInternalConsoleAttributedString
-//      state.mConsoleAttributedString = newValue
-//      Task { @MainActor in self.mConsoleAttributedString = newValue }
-//    }
-//  }
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
   @MainActor public func clearConsole () {
     self.mConsoleBuffer.clear()
-//    self.mConsoleState.withLock {
-//      $0.mConsoleRefreshTimer = nil
-//      $0.mInternalConsoleAttributedString = AttributedString ()
-//      $0.mConsoleAttributedString = AttributedString ()
-//    }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -343,6 +303,15 @@ let kCtrlCharacterBackColor = Color.gray.mix (with: .white, by: 0.85)
   nonisolated open func handleReceivedLines (_ inLines : [String], _ ioBuffer : inout [String]) {
     ioBuffer += inLines
   }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  //MARK: Send Task
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  var mSendThread : Thread? = nil
+  let mSendTaskIsCancelled = Mutex <Bool> (false)
+  let mSendTaskBuffer = Mutex <Data> (Data ())
+  let mSendSemaphore = DispatchSemaphore (value: 0)
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 

@@ -11,17 +11,17 @@ import Combine
 /// Combine et sont appliquées par append/delete incrémental sur le
 /// NSTextStorage, en contournant le cycle de diff SwiftUI (trop coûteux
 /// pour du texte attribué qui grossit en continu).
-public struct AttributedConsoleView : NSViewRepresentable {
+public struct ConsoleTextView : NSViewRepresentable {
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  @State private var mBuffer : AttributedStringBuffer
+  @State private var mBuffer : ConsoleTextBuffer
   private var mAutoScroll : Bool = true
   private var maxLines : Int = 5000
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  public init (buffer inBuffer : AttributedStringBuffer, autoScroll inAutoScroll : Bool) {
+  public init (buffer inBuffer : ConsoleTextBuffer, autoScroll inAutoScroll : Bool) {
     self.mBuffer = inBuffer
     self.mAutoScroll = inAutoScroll
   }
@@ -91,43 +91,51 @@ public struct AttributedConsoleView : NSViewRepresentable {
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  func subscribe (to inBuffer : AttributedStringBuffer) {
+  func subscribe (to inBuffer : ConsoleTextBuffer) {
     inBuffer.appended
-    .sink { [weak self] chunk in self?.appendChunk(chunk) }
-    .store(in: &cancellables)
+    .sink { [weak self] chunk in self?.appendChunk (chunk) }
+    .store (in: &cancellables)
 
     inBuffer.cleared
-      .sink { [weak self] in self?.clearAll() }
-      .store(in: &cancellables)
+    .sink { [weak self] in self?.clearAll () }
+    .store (in: &cancellables)
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  private func appendChunk(_ inString : String) {
-      guard let textView, let scrollView, let storage = textView.textStorage else { return }
+  private func appendChunk (_ inChunkArray : [ConsoleTextBuffer.Element]) {
+    guard let textView, let scrollView, let storage = textView.textStorage else { return }
 
-      let wasAtBottom = isScrolledToBottom(scrollView)
-      let chunk = NSAttributedString(string: inString)
-      storage.beginEditing()
-      storage.append(chunk)
-      storage.endEditing()
+    let wasAtBottom = isScrolledToBottom (scrollView)
+    let font = NSFont.monospacedSystemFont (ofSize: 11, weight: .regular)
+    let attributedString = NSMutableAttributedString ()
+    for chunk in inChunkArray {
+      let at = NSAttributedString (
+        string: chunk.string,
+        attributes: [.foregroundColor: chunk.foregroundColor, .backgroundColor: chunk.backgroundColor, .font: font]
+      )
+      attributedString.append (at)
+    }
+    storage.beginEditing()
+    storage.append (attributedString)
+    storage.endEditing()
 
-      lineCount += chunk.string.reduce(0) { $1 == "\n" ? $0 + 1 : $0 }
+    lineCount += attributedString.string.reduce(0) { $1 == "\n" ? $0 + 1 : $0 }
 
-      if lineCount > maxLines {
-          trimExcess(storage)
-      }
+    if lineCount > maxLines {
+        trimExcess(storage)
+    }
 
-      if autoScroll && wasAtBottom {
-          textView.scrollToEndOfDocument(nil)
-      }
+    if autoScroll && wasAtBottom {
+        textView.scrollToEndOfDocument(nil)
+    }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   /// Supprime les plus anciennes lignes en dépassement, par suppression
   /// de plage en tête de texte (pas de reconstruction complète).
-  private func trimExcess(_ storage: NSTextStorage) {
+  private func trimExcess (_ storage: NSTextStorage) {
       let excess = lineCount - maxLines
       let full = storage.string as NSString
       var searchStart = 0
@@ -156,10 +164,10 @@ public struct AttributedConsoleView : NSViewRepresentable {
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   private func isScrolledToBottom(_ scrollView: NSScrollView) -> Bool {
-      guard let documentView = scrollView.documentView else { return true }
-      let visibleMaxY = scrollView.contentView.bounds.maxY
-      let contentMaxY = documentView.bounds.maxY
-      return visibleMaxY >= contentMaxY - 40 // tolérance
+    guard let documentView = scrollView.documentView else { return true }
+    let visibleMaxY = scrollView.contentView.bounds.maxY
+    let contentMaxY = documentView.bounds.maxY
+    return visibleMaxY >= contentMaxY - 40 // tolérance
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

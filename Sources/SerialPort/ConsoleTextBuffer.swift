@@ -8,53 +8,45 @@ import Synchronization
 
 //--------------------------------------------------------------------------------------------------
 
-@Observable @MainActor public final class AttributedStringBuffer {
+@Observable @MainActor public final class ConsoleTextBuffer {
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  nonisolated struct Element : Sendable {
+    let string : String
+    let foregroundColor : NSColor
+    let backgroundColor : NSColor
+  }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   /// Émet uniquement les *nouveaux* segments à ajouter (delta).
   /// La vue s'y abonne pour faire des appends incrémentaux dans le NSTextStorage.
-  let appended = PassthroughSubject<String, Never>()
+  let appended = PassthroughSubject<[Element], Never>()
   /// Émis quand un clear() est demandé.
   let cleared = PassthroughSubject<Void, Never>()
 
-  private let mPending = Mutex <[String]> ([])
+  private let mPending = Mutex <[Element]> ([])
   private var mTimer : Timer?
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   init (flushInterval inFlushInterval : TimeInterval) {
     self.mTimer = Timer.scheduledTimer(withTimeInterval: inFlushInterval, repeats: true) { _ in
-      Task { @MainActor in self.flush() }
+      Task { @MainActor in self.flush () }
     }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    /// Version String simple (convertie avec un style par défaut).
-  nonisolated func append (line inLine: String, color: NSColor, bold: Bool) {
-//    let font = NSFont.monospacedSystemFont (ofSize: 11, weight: bold ? .bold : .regular)
-    self.mPending.withLock {
-//      let at = NSAttributedString (
-//        string: inLine + "\n",
-//        attributes: [.foregroundColor: color, .font: font]
-//      )
-      $0.append (inLine)
-    }
+  nonisolated func append (_ inElement : Element) {
+    self.mPending.withLock { $0.append (inElement) }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    /// Version AttributedString (Swift, moderne).
-//  nonisolated func append (attributedString line: AttributedString) {
-//      var withNewline = line
-//      withNewline.characters.append(contentsOf: "\n")
-//      self.append(NSAttributedString(withNewline))
-//  }
-
-    /// Version NSAttributedString directe.
-  nonisolated func append (_ inAT : String) {
-    self.mPending.withLock { $0.append (inAT) }
+  nonisolated func append (_ inElements : [Element]) {
+    self.mPending.withLock { $0 += inElements }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -65,22 +57,14 @@ import Synchronization
       $0.removeAll()
       return r
     }
-
-    var combined = String ()
-    for piece in toAdd { combined.append(piece) }
-
-    Task { @MainActor in
-      self.appended.send (combined)
-    }
+    Task { @MainActor in self.appended.send (toAdd) }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  nonisolated func clear() {
+  nonisolated func clear () {
     self.mPending.withLock { $0.removeAll () }
-    Task { @MainActor in
-      self.cleared.send ()
-    }
+    Task { @MainActor in self.cleared.send () }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -88,4 +72,3 @@ import Synchronization
 }
 
 //--------------------------------------------------------------------------------------------------
-
