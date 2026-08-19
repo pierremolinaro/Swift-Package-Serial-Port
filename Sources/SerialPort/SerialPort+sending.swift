@@ -15,12 +15,8 @@ extension SerialPort {
     self.mSendTaskBuffer.withLock( { $0 += data } )
     self.mSendSemaphore.signal ()
     self.reportSendingState (data.count)
-    let consoleLogIsEnabled = self.mReceivedDataHandler.withLock { $0.mConsoleLogIsEnabled }
+    let consoleLogIsEnabled = self.nonisolatedConsoleLogIsEnabled
     if consoleLogIsEnabled {
-//          var attributeContainer = AttributeContainer ()
-//          attributeContainer.font = Font.custom ("Menlo", size: 12)
-//          attributeContainer.foregroundColor = kSendColor
-//          let at = AttributedString (inString, attributes: attributeContainer)
       let e = ConsoleTextBuffer.Element (string: inString, foregroundColor: kSendColor, backgroundColor: .clear)
       self.mConsoleBuffer.append (e)
     }
@@ -32,7 +28,7 @@ extension SerialPort {
     self.mSendTaskBuffer.withLock( { $0 += inData } )
     self.mSendSemaphore.signal ()
     self.reportSendingState (inData.count)
-    let consoleLogIsEnabled = self.mReceivedDataHandler.withLock { $0.mConsoleLogIsEnabled }
+    let consoleLogIsEnabled = self.nonisolatedConsoleLogIsEnabled
     if consoleLogIsEnabled {
       var s = ""
       for byte in inData {

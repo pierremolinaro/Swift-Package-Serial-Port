@@ -12,7 +12,6 @@ extension SerialPort {
     var mReceivedData = Data ()
     var mReceivedStringFragment = ""
     var mReceivedLinesBuffer = [String] ()
-    var mConsoleLogIsEnabled = false
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -60,7 +59,7 @@ extension SerialPort {
         $0.mReceivedData += data
         if let s = String (data: $0.mReceivedData, encoding: .utf8) {
           self.reportReceivingState ($0.mReceivedData.count)
-          if $0.mConsoleLogIsEnabled {
+          if self.nonisolatedConsoleLogIsEnabled {
             self.updateUIOnReceiving (string: s)
           }
           $0.mReceivedData.removeAll ()

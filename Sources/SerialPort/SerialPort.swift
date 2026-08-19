@@ -288,11 +288,17 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  public var mConsoleLogIsEnabled = false {
-    didSet {
-      self.mReceivedDataHandler.withLock {
-        $0.mConsoleLogIsEnabled = self.mConsoleLogIsEnabled
-      }
+  nonisolated public func appendToConsole (string : String,
+                                           foregroundColor : NSColor,
+                                           backgroundColor : NSColor) {
+    let consoleLogIsEnabled = self.nonisolatedConsoleLogIsEnabled
+      if consoleLogIsEnabled {
+      let e = ConsoleTextBuffer.Element (
+        string: string,
+        foregroundColor: foregroundColor,
+        backgroundColor: backgroundColor
+      )
+      self.mConsoleBuffer.append (e)
     }
   }
 
@@ -303,7 +309,51 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  // Override this function for intercepting received lines
+  //MARK: Enable 
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  @ObservationIgnored private let mNonIsolatedConsoleLogIsEnabled = Mutex <Bool> (false)
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  @MainActor public var mainActorConsoleLogIsEnabled : Bool {
+    set {
+      self.nonisolatedSetConsoleLogIsEnabled (newValue: newValue)
+    }
+    get {
+      self.access (keyPath: \.mainActorConsoleLogIsEnabled)
+      return self.mNonIsolatedConsoleLogIsEnabled.withLock { $0 }
+    }
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  nonisolated public var nonisolatedConsoleLogIsEnabled : Bool {
+    self.mNonIsolatedConsoleLogIsEnabled.withLock { $0 }
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  nonisolated func nonisolatedSetConsoleLogIsEnabled (newValue inNewValue : Bool) {
+  //-- Écriture immédiate, thread-safe, visible tout de suite
+  //     par tout code qui lit mEngraverStateMutex directement
+    let modified = self.mNonIsolatedConsoleLogIsEnabled.withLock {
+      let condition = $0 != inNewValue
+      if condition {
+        $0 = inNewValue
+      }
+      return condition
+    }
+  //--- Notification Observation, différée sur le MainActor
+    if modified {
+      Task { @MainActor in
+        self.withMutation (keyPath: \.mainActorConsoleLogIsEnabled) { }
+      }
+    }
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  //MARK: Override this function for intercepting received lines
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   nonisolated open func handleReceivedLines (_ inLines : [String], _ ioBuffer : inout [String]) {
@@ -317,7 +367,7 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
   var mSendThread : Thread? = nil
   let mSendTaskIsCancelled = Mutex <Bool> (false)
   let mSendTaskBuffer = Mutex <Data> (Data ())
-  let mSendSemaphore = DispatchSemaphore (value: 0)
+  nonisolated let mSendSemaphore = DispatchSemaphore (value: 0)
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
