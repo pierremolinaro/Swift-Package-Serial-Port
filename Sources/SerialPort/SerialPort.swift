@@ -18,12 +18,12 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  public init () {
+  @MainActor public init () {
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  private var mPath : String = ""
+  @MainActor private var mPath : String = ""
   let mFileDescriptor = Mutex <Int32?> (nil)
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -33,8 +33,14 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  private(set) var title = ""
-  private(set) var errorString = ""
+  @MainActor private(set) var title = ""
+  @MainActor private(set) var errorString = ""
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  //MARK: Disconnection
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  @MainActor open var disconnectIsEnabled : Bool { true }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //MARK: Properties for receiving data

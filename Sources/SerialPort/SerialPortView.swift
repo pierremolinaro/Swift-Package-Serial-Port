@@ -79,8 +79,10 @@ public struct SerialPortView : View {
       if !self.mSerialPort.title.isEmpty {
         Text (self.mSerialPort.title).italic ()
       }
-      Button ("Disconnect") { self.mSerialPort.closePort (withMessage: nil) }
-      .disabled (!self.mSerialPort.isSerialPortConnected)
+      if self.mSerialPort.isSerialPortConnected {
+        Button ("Disconnect") { self.mSerialPort.closePort (withMessage: nil) }
+        .disabled (!self.mSerialPort.disconnectIsEnabled)
+      }
     }
     .padding (4)
     .sheet (isPresented: self.$mPresentingPortSelectionDialog) { self.portSelectionDialog () }
