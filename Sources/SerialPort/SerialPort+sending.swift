@@ -12,8 +12,8 @@ extension SerialPort {
 
   public nonisolated func sendString (_ inString : String) {
     let data = inString.data (using: String.Encoding.utf8)!
-    self.mSendTaskBuffer.withLock( { $0 += data } )
-    self.mSendSemaphore.signal ()
+    self.mSendThreadBuffer.withLock( { $0 += data } )
+    self.mSendThreadActivationSemaphore.signal ()
     self.reportSendingState (data.count)
     let consoleLogIsEnabled = self.nonisolatedConsoleLogIsEnabled
     if consoleLogIsEnabled {
@@ -25,8 +25,8 @@ extension SerialPort {
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public nonisolated func sendData (_ inData : Data) {
-    self.mSendTaskBuffer.withLock( { $0 += inData } )
-    self.mSendSemaphore.signal ()
+    self.mSendThreadBuffer.withLock( { $0 += inData } )
+    self.mSendThreadActivationSemaphore.signal ()
     self.reportSendingState (inData.count)
     let consoleLogIsEnabled = self.nonisolatedConsoleLogIsEnabled
     if consoleLogIsEnabled {
@@ -42,21 +42,21 @@ extension SerialPort {
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   @MainActor func launchSendTask (_ inFileDescriptor : Int32) {
+    self.mSendThreadIsCancelled.withLock { $0 = false }
     self.mSendThread = Thread {
- //     print ("START")
-      while !self.mSendTaskIsCancelled.withLock ( { $0 } ) {
-        self.mSendSemaphore.wait ()
-//        print ("PASS")
-        if !self.mSendTaskBuffer.withLock( { $0.isEmpty } ) {
-          let data = self.mSendTaskBuffer.withLock( { $0 } )
+      while !self.mSendThreadIsCancelled.withLock ( { $0 } ) {
+        self.mSendThreadActivationSemaphore.wait ()
+        if self.mSendThreadBuffer.withLock ( { !$0.isEmpty } ) {
+          let data = self.mSendThreadBuffer.withLock( { $0 } )
           let sent = unsafe data.withUnsafeBytes {
-            return unsafe Darwin.write (inFileDescriptor, $0.baseAddress, $0.count)
+            let r = unsafe Darwin.write (inFileDescriptor, $0.baseAddress, $0.count)
+            return r
           }
-          self.mSendTaskBuffer.withLock { $0.removeFirst (sent) }
+          self.mSendThreadBuffer.withLock { $0.removeFirst (sent) }
           if sent < data.count {
             Task {
               try! await Task.sleep (nanoseconds: 1_000_000) // 1 ms
-              self.mSendSemaphore.signal ()
+              self.mSendThreadActivationSemaphore.signal ()
             }
           }
         }

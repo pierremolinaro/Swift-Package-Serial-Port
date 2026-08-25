@@ -80,7 +80,7 @@ public struct SerialPortView : View {
         Text (self.mSerialPort.title).italic ()
       }
       if self.mSerialPort.isSerialPortConnected {
-        Button ("Disconnect") { self.mSerialPort.closePort (withMessage: nil) }
+        Button ("Disconnect") { self.mSerialPort.closePort (withMessage: "") }
         .disabled (!self.mSerialPort.disconnectIsEnabled)
       }
     }

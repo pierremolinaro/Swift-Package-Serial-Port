@@ -16,32 +16,31 @@ extension SerialPort {
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //MARK: Receive
+  // Point subtil (merci Claude) : il faut que les handlers s'exécutent sur la « mReceiveQueue »
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   @MainActor func setupReceive (_ inFileDescriptor : Int32) {
-    let readSource = DispatchSource.makeReadSource (
-      fileDescriptor: inFileDescriptor,
-      queue: self.mReceiveQueue
-    )
-    self.mReadSource = readSource
-    readSource.setEventHandler (handler: self.makeEventHandler (inFileDescriptor))
-    readSource.setCancelHandler { Darwin.close (inFileDescriptor) }
-    readSource.resume ()
+    self.mReceiveQueue.async {
+      let readSource = DispatchSource.makeReadSource (
+        fileDescriptor: inFileDescriptor,
+        queue: self.mReceiveQueue
+      )
+      Task { @MainActor in self.mReadSource = readSource }
+      readSource.setEventHandler  { self.readSourceHandler (inFileDescriptor) }
+      readSource.setCancelHandler { self.cancelHandler (inFileDescriptor) }
+      readSource.resume ()
+    }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  // Point subtil (merci Claude) : makeEventHandler s'exécute sur le main thread,
-  // mais une seule fois, quand setupReceive est appelé
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  nonisolated private func makeEventHandler (_ inFileDescriptor : Int32) -> () -> Void {
-    // print ("makeEventHandler, on main thread: \(Thread.isMainThread)") // --> true
-    return { [weak self] in self?.readSourceHandler (inFileDescriptor) }
+  nonisolated private func cancelHandler (_ inFileDescriptor : Int32) {
+    _ = Darwin.tcflush (inFileDescriptor, TCIFLUSH)
+    _ = Darwin.close (inFileDescriptor)
+    Task { @MainActor in self.mReadSource = nil }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  // Point subtil (merci Claude) : readSourceHandler ne s'exécute pas sur le main thread,
-  // mais sur la « self.mReceiveQueue »
 
   nonisolated private func readSourceHandler (_ inFileDescriptor : Int32) {
 //    print ("readSourceHandler, on main thread: \(Thread.isMainThread)") // --> false
@@ -89,32 +88,14 @@ extension SerialPort {
         let s = unsafe String (format: "<0x%02X>", scalar.value)
         let e = ConsoleTextBuffer.Element (string: s, foregroundColor: kReceiveColor, backgroundColor: kCtrlCharacterBackColor)
         elementArray.append (e)
-//        var attributeContainer = AttributeContainer ()
-//        attributeContainer.font = Font.custom ("Menlo", size: 12)
-//        attributeContainer.foregroundColor = kReceiveColor
-//        attributeContainer.backgroundColor = kCtrlCharacterBackColor
-//        return AttributedString (
-//          unsafe String (format: "<0x%02X>", scalar.value),
-//          attributes: attributeContainer
-//        )
       }else{
         currentString += String (scalar)
-//        var attributeContainer = AttributeContainer ()
-//        attributeContainer.font = Font.custom ("Menlo", size: 12)
-//        attributeContainer.foregroundColor = kReceiveColor
-//        return AttributedString (String (scalar), attributes: attributeContainer)
       }
     }
     if !currentString.isEmpty {
       let e = ConsoleTextBuffer.Element (string: currentString, foregroundColor: kReceiveColor, backgroundColor: .clear)
       elementArray.append (e)
     }
-//    var attributedString = AttributedString ()
-//    for at in atStringArray {
-//      attributedString.append (at)
-//    }
-//    self.mConsoleBuffer.append (inString)
-//    let e = ConsoleTextBuffer.Element (string: inString, foregroundColor: kReceiveColor, backgroundColor: .clear)
     self.mConsoleBuffer.append (elementArray)
   }
 

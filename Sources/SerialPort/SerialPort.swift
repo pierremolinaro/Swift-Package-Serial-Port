@@ -8,9 +8,9 @@ import Synchronization
 
 //--------------------------------------------------------------------------------------------------
 
-let kSendColor = NSColor.green.blended (withFraction: 0.25, of: .black)! //.mix (with: .black, by: 0.25)
+let kSendColor = NSColor.green.blended (withFraction: 0.25, of: .black)!
 let kReceiveColor = NSColor.red
-let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .white)! // .mix (with: .white, by: 0.85)
+let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .white)!
 
 //--------------------------------------------------------------------------------------------------
 
@@ -46,7 +46,7 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
   //MARK: Properties for receiving data
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  var mReadSource : DispatchSourceRead? = nil
+  var mReadSource : any DispatchSourceRead? = nil
   let mReceiveQueue = DispatchQueue (label: "name.pcmolinaro.receive.queue", qos: .userInteractive)
   let mReceivedDataHandler = Mutex <ReceivedDataHandler> (ReceivedDataHandler ())
 
@@ -178,7 +178,7 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
       // O_NOCTTY: If path refers to a terminal device—see tty(4)—it will not
       //     become the process's controlling terminal even if the
       //     process does not have one.
-      let fileDescriptor = unsafe open (self.mPath, flags)
+      let fileDescriptor = unsafe Darwin.open (self.mPath, flags)
       if fileDescriptor > 0 {
         self.mFileDescriptor.withLock { $0 = fileDescriptor }
         Self.setSettings (
@@ -209,7 +209,7 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
                                               useSoftwareFlowControl: Bool = false,
                                               processOutput: Bool = false) {
   //--- Set up the control structure
-    var settings = termios ()
+    var settings = Darwin.termios ()
   //--- Get options structure for the port
     unsafe tcgetattr (inFileDescriptor, &settings)
   //--- Set baud rates
@@ -266,18 +266,29 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
   //MARK: Close port
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  @MainActor open func closePort (withMessage inMessage : String?) {
-    self.title = ""
-    self.mSendTaskIsCancelled.withLock { $0 = true }
-    self.mSendSemaphore.signal ()
+  @MainActor open func closePort (withMessage inMessage : String) {
+  //--- Terminate and free send thread
+    self.mSendThreadIsCancelled.withLock { $0 = true }
+    self.mSendThreadActivationSemaphore.signal ()
     self.mSendThread = nil
+  //--- Read: cancel flushes io buffers and close connection
+//    self.mReceiveQueue.async { [weak self] in   // <-- important : cancel() sur la MÊME queue
+//      self?.mReadSource?.cancel()
+//    }
+    self.mReadSource?.cancel ()
+//    print ("cancelled \(self.mReadSource?.isCancelled)")
+  //  self.mReadSource = nil
+  //---
+//    if let descriptor = self.mFileDescriptor.withLock ({ $0 }) {
+////      Darwin.tcflush (descriptor, TCIOFLUSH)
+////      Darwin.close (descriptor)
+//      self.mFileDescriptor.withLock { $0 = nil }
+//    }
+  //--- Reset properties
     self.mIsSerialPortConnected = false
-    if self.mFileDescriptor.withLock ({ $0 }) != nil {
-      self.mFileDescriptor.withLock { $0 = nil }
-      if let s = inMessage {
-        self.errorString = s
-      }
-    }
+    self.mFileDescriptor.withLock { $0 = nil }
+    self.title = ""
+    self.errorString = inMessage
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -365,9 +376,9 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   var mSendThread : Thread? = nil
-  let mSendTaskIsCancelled = Mutex <Bool> (false)
-  let mSendTaskBuffer = Mutex <Data> (Data ())
-  nonisolated let mSendSemaphore = DispatchSemaphore (value: 0)
+  let mSendThreadIsCancelled = Mutex <Bool> (false)
+  let mSendThreadBuffer = Mutex <Data> (Data ())
+  nonisolated let mSendThreadActivationSemaphore = DispatchSemaphore (value: 0)
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
