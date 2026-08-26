@@ -61,7 +61,7 @@ extension SerialPort {
           }
         }
       }
-      print ("SEND THREAD ENDED")
+      // print ("SEND THREAD ENDED")
     }
     self.mSendThread?.start ()
   }
