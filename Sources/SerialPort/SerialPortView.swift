@@ -10,6 +10,7 @@ public struct SerialPortView : View {
 
   @State private var mSerialPort : SerialPort
   private let mAuxiliaryLeftView : any View?
+  private let mShowSerialSettings : Bool
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -43,10 +44,12 @@ public struct SerialPortView : View {
 
   public init (serialPort inSerialPort : SerialPort,
                filteredPortsBaseName inFilteredPortsBaseName : String,
+               showSerialSettings inShowSerialSettings : Bool,
                auxiliaryLeftView inAuxiliaryLeftView : any View? = nil) {
     self.mSerialPort = inSerialPort
     self.mAuxiliaryLeftView = inAuxiliaryLeftView
     self.mFilteredPortsBaseName = inFilteredPortsBaseName
+    self.mShowSerialSettings = inShowSerialSettings
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -57,8 +60,11 @@ public struct SerialPortView : View {
         AnyView (auxiliaryLeftView)
       }
       if !self.mSerialPort.isSerialPortConnected {
-        Button ("", systemImage: "gearshape.fill") { self.mPresentingPortSettingDialog = true }
-        .labelStyle (.iconOnly)
+        if self.mShowSerialSettings {
+          Button ("", systemImage: "gearshape.fill") {
+             self.mPresentingPortSettingDialog = true
+          }.labelStyle (.iconOnly)
+        }
         Button ("Connect…") { self.mPresentingPortSelectionDialog = true }
         // .disabled (self.mSerialPort.isSerialPortConnected)
         if self.mSerialPortWatcher.mExposedSerialPorts.count == 1 {

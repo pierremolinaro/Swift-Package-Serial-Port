@@ -48,7 +48,6 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
 
   var mReadSource : any DispatchSourceRead? = nil
   let mReceiveQueue = DispatchQueue (label: "name.pcmolinaro.receive.queue", qos: .userInteractive)
-//  let mReceivedDataHandler = Mutex <ReceivedDataHandler> (ReceivedDataHandler ())
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //MARK: Sending State Report
