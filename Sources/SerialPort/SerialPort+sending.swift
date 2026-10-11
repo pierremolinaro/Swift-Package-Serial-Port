@@ -12,7 +12,7 @@ extension SerialPort {
 
   public nonisolated func sendString (_ inString : String) {
     let data = inString.data (using: String.Encoding.utf8)!
-    self.mSendThreadBuffer.withLock( { $0 += data } )
+    self.mSendThreadBuffer.withLock { $0 += data }
     self.mSendThreadActivationSemaphore.signal ()
     self.reportSendingState (data.count)
     let consoleLogIsEnabled = self.nonisolatedConsoleLogIsEnabled
@@ -25,18 +25,18 @@ extension SerialPort {
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public nonisolated func sendData (_ inData : Data) {
-    self.mSendThreadBuffer.withLock( { $0 += inData } )
+    self.mSendThreadBuffer.withLock { $0 += inData }
     self.mSendThreadActivationSemaphore.signal ()
     self.reportSendingState (inData.count)
-//    let consoleLogIsEnabled = self.nonisolatedConsoleLogIsEnabled
-//    if consoleLogIsEnabled {
-//      var s = ""
-//      for byte in inData {
-//        s += unsafe String (format: "<0x%02X>", byte)
-//      }
-//      let e = ConsoleTextBuffer.Element (string: s, foregroundColor: kSendColor, backgroundColor: kCtrlCharacterBackColor)
-//      self.mConsoleBuffer.append (e)
-//    }
+    let consoleLogIsEnabled = self.nonisolatedConsoleLogIsEnabled
+    if consoleLogIsEnabled {
+      var s = ""
+      for byte in inData {
+        s += unsafe String (format: "<0x%02X>", byte)
+      }
+      let e = ConsoleTextBuffer.Element (string: s, foregroundColor: kSendColor, backgroundColor: kCtrlCharacterBackColor)
+      self.mConsoleBuffer.append (e)
+    }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
