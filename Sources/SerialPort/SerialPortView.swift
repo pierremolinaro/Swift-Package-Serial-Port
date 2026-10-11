@@ -18,7 +18,8 @@ public struct SerialPortView : View {
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  @AppStorage("show.only.usbserial.ports") private var mShowOnly_usbserial_Ports = true
+  private let mFilteredPortsBaseName : String
+  @AppStorage("show.only.filtred.ports") private var mShowOnlyFilteredPorts = true
   @State private var mPresentingPortSelectionDialog = false
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -41,9 +42,11 @@ public struct SerialPortView : View {
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public init (serialPort inSerialPort : SerialPort,
+               filteredPortsBaseName inFilteredPortsBaseName : String,
                auxiliaryLeftView inAuxiliaryLeftView : any View? = nil) {
     self.mSerialPort = inSerialPort
     self.mAuxiliaryLeftView = inAuxiliaryLeftView
+    self.mFilteredPortsBaseName = inFilteredPortsBaseName
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -89,7 +92,7 @@ public struct SerialPortView : View {
     .sheet (isPresented: self.$mPresentingPortSettingDialog) { self.portSettingDialog () }
     .sheet (isPresented: self.$mPresentingPortConnectionProgress) { self.portConnectionProgress () }
     .onAppear {
-      self.mSerialPortWatcher.mShowOnly_usbserial_Ports = self.mShowOnly_usbserial_Ports
+      self.mSerialPortWatcher.mFilteredPortBaseName = self.mShowOnlyFilteredPorts ? self.mFilteredPortsBaseName : nil
     }
     .onDisappear { self.mSerialPortWatcher.stopWatching () }
   }
@@ -99,7 +102,7 @@ public struct SerialPortView : View {
   private func portSelectionDialog () -> some View {
     VStack (spacing: 16) {
       AppIconView (title: "Select a serial port")
-      Toggle ("Show only 'usbserial' ports", isOn: self.$mShowOnly_usbserial_Ports)
+      Toggle ("Show only '\(self.mFilteredPortsBaseName)' ports", isOn: self.$mShowOnlyFilteredPorts)
       if self.mSerialPortWatcher.mExposedSerialPorts.count == 0 {
         Text ("No serial port available").foregroundStyle (.secondary)
       }else if self.mSerialPortWatcher.mExposedSerialPorts.count == 1 {
@@ -131,8 +134,8 @@ public struct SerialPortView : View {
       .customCancelActionDecoration ()
     }
     .padding ()
-    .onChange (of: self.mShowOnly_usbserial_Ports, initial: true) {
-      self.mSerialPortWatcher.mShowOnly_usbserial_Ports = self.mShowOnly_usbserial_Ports
+    .onChange (of: self.mShowOnlyFilteredPorts, initial: true) {
+      self.mSerialPortWatcher.mFilteredPortBaseName = self.mShowOnlyFilteredPorts ? self.mFilteredPortsBaseName : nil
     }
   }
 

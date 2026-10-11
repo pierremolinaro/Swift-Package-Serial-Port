@@ -8,11 +8,11 @@ extension SerialPort {
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  struct ReceivedDataHandler {
-    var mReceivedData = Data ()
-    var mReceivedStringFragment = ""
-    var mReceivedLinesBuffer = [String] ()
-  }
+//  struct ReceivedDataHandler {
+//    var mReceivedData = Data ()
+//    var mReceivedStringFragment = ""
+//    var mReceivedLinesBuffer = [String] ()
+//  }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //MARK: Receive
@@ -54,75 +54,9 @@ extension SerialPort {
     if data.isEmpty { // IMPORTANT : ceci permet de détecter une fermeture intempestive
       Task { @MainActor in self.closePort (withMessage: "Disconnected") }
     }else{
-      self.mReceivedDataHandler.withLock {
-        $0.mReceivedData += data
-        if let s = String (data: $0.mReceivedData, encoding: .utf8) {
-          self.reportReceivingState ($0.mReceivedData.count)
-          if self.nonisolatedConsoleLogIsEnabled {
-            self.updateUIOnReceiving (string: s)
-          }
-          $0.mReceivedData.removeAll ()
-          $0.mReceivedStringFragment += s
-          let unixString = $0.mReceivedStringFragment.replacingOccurrences (of: "\r\n", with: "\n")
-          var lines = unixString.components (separatedBy: "\n")
-          $0.mReceivedStringFragment = lines.removeLast ()
-          self.handleReceivedLines (lines, &$0.mReceivedLinesBuffer)
-        }
-      }
+      self.handleReceivedData (data)
     }
 //    exitTracing ("handle.receive.data")
-  }
-
- // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-  nonisolated private func updateUIOnReceiving (string inString : String) {
-    var elementArray = [ConsoleTextBuffer.Element] ()
-    var currentString = ""
-    for scalar in inString.unicodeScalars {
-      if scalar.isASCII, scalar.value < 0x20, scalar.value != 0x0A, scalar.value != 0x0D {
-        if !currentString.isEmpty {
-          let e = ConsoleTextBuffer.Element (string: currentString, foregroundColor: kReceiveColor, backgroundColor: .clear)
-          elementArray.append (e)
-          currentString.removeAll (keepingCapacity: true)
-        }
-        let s = unsafe String (format: "<0x%02X>", scalar.value)
-        let e = ConsoleTextBuffer.Element (string: s, foregroundColor: kReceiveColor, backgroundColor: kCtrlCharacterBackColor)
-        elementArray.append (e)
-      }else{
-        currentString += String (scalar)
-      }
-    }
-    if !currentString.isEmpty {
-      let e = ConsoleTextBuffer.Element (string: currentString, foregroundColor: kReceiveColor, backgroundColor: .clear)
-      elementArray.append (e)
-    }
-    self.mConsoleBuffer.append (elementArray)
-  }
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-  nonisolated public func getReceivedLine () async -> String? {
-    let start = ContinuousClock.now
-    while true {
-      if let line = self.extractFirstReceivedLine () {
-        return line
-      }else if (ContinuousClock.Instant.now - start) > .seconds (1) {
-        return nil
-      }
-      await Task.yield ()
-    }
-  }
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-  nonisolated private func extractFirstReceivedLine () -> String? {
-    self.mReceivedDataHandler.withLock {
-      if $0.mReceivedLinesBuffer.isEmpty {
-        return nil
-      }else{
-        return $0.mReceivedLinesBuffer.removeFirst ()
-      }
-    }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

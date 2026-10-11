@@ -24,7 +24,7 @@ import Observation
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  var mShowOnly_usbserial_Ports : Bool = false {
+  var mFilteredPortBaseName : String? = nil {
     didSet { self.updateSerialPortList () }
   }
 
@@ -64,7 +64,11 @@ import Observation
   private func updateSerialPortList () {
     var exposedSerialPorts : [SerialPortDescription] = []
     for s in self.mAllSerialPorts {
-      if !self.mShowOnly_usbserial_Ports || s.path.contains ("usbserial") {
+      if let name = self.mFilteredPortBaseName {
+        if s.path.contains (name) {
+          exposedSerialPorts.append (s)
+        }
+      }else{
         exposedSerialPorts.append (s)
       }
     }

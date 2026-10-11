@@ -28,15 +28,15 @@ extension SerialPort {
     self.mSendThreadBuffer.withLock( { $0 += inData } )
     self.mSendThreadActivationSemaphore.signal ()
     self.reportSendingState (inData.count)
-    let consoleLogIsEnabled = self.nonisolatedConsoleLogIsEnabled
-    if consoleLogIsEnabled {
-      var s = ""
-      for byte in inData {
-        s += unsafe String (format: "<0x%02X>", byte)
-      }
-      let e = ConsoleTextBuffer.Element (string: s, foregroundColor: kSendColor, backgroundColor: kCtrlCharacterBackColor)
-      self.mConsoleBuffer.append (e)
-    }
+//    let consoleLogIsEnabled = self.nonisolatedConsoleLogIsEnabled
+//    if consoleLogIsEnabled {
+//      var s = ""
+//      for byte in inData {
+//        s += unsafe String (format: "<0x%02X>", byte)
+//      }
+//      let e = ConsoleTextBuffer.Element (string: s, foregroundColor: kSendColor, backgroundColor: kCtrlCharacterBackColor)
+//      self.mConsoleBuffer.append (e)
+//    }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -46,8 +46,9 @@ extension SerialPort {
     self.mSendThread = Thread {
       while !self.mSendThreadIsCancelled.withLock ( { $0 } ) {
         self.mSendThreadActivationSemaphore.wait ()
+        // enterTracing ("send.data")
         if self.mSendThreadBuffer.withLock ( { !$0.isEmpty } ) {
-          let data = self.mSendThreadBuffer.withLock( { $0 } )
+          let data = self.mSendThreadBuffer.withLock { $0 }
           let sent = unsafe data.withUnsafeBytes {
             let r = unsafe Darwin.write (inFileDescriptor, $0.baseAddress, $0.count)
             return r
@@ -60,8 +61,8 @@ extension SerialPort {
             }
           }
         }
+        // exitTracing ("send.data")
       }
-      // print ("SEND THREAD ENDED")
     }
     self.mSendThread?.start ()
   }

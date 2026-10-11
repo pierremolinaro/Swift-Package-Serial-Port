@@ -48,7 +48,7 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
 
   var mReadSource : any DispatchSourceRead? = nil
   let mReceiveQueue = DispatchQueue (label: "name.pcmolinaro.receive.queue", qos: .userInteractive)
-  let mReceivedDataHandler = Mutex <ReceivedDataHandler> (ReceivedDataHandler ())
+//  let mReceivedDataHandler = Mutex <ReceivedDataHandler> (ReceivedDataHandler ())
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //MARK: Sending State Report
@@ -79,24 +79,29 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
         }
         $0.mSendingReportTimer = timer
         RunLoop.main.add (timer, forMode: .common)
+        let str = "Tx: \($0.mSendingByteCount) bytes/s"
+        Task.detached { @MainActor in self.mSendingStateString = str }
+        $0.mSendingByteCount = 0
       }
     }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  nonisolated func sendingReportTimerDidFire () {
+  nonisolated private func sendingReportTimerDidFire () {
+    // enterTracing ("sendingReportTimerDidFire")
     self.mSendingState.withLock {
       if $0.mSendingByteCount == 0 {
-        Task { @MainActor in self.mSendingStateString = "" }
+        Task.detached { @MainActor in self.mSendingStateString = "" }
         $0.mSendingReportTimer?.invalidate ()
         $0.mSendingReportTimer = nil
       }else{
         let str = "Tx: \($0.mSendingByteCount) bytes/s"
-        Task { @MainActor in self.mSendingStateString = str }
+        Task.detached { @MainActor in self.mSendingStateString = str }
         $0.mSendingByteCount = 0
       }
     }
+    // exitTracing ("sendingReportTimerDidFire")
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -151,11 +156,11 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   open nonisolated func removeAllReceivedDatas () {
-    self.mReceivedDataHandler.withLock {
-      $0.mReceivedData.removeAll ()
-      $0.mReceivedStringFragment = ""
-      $0.mReceivedLinesBuffer.removeAll ()
-    }
+//    self.mReceivedDataHandler.withLock {
+//      $0.mReceivedData.removeAll ()
+//      $0.mReceivedStringFragment = ""
+//      $0.mReceivedLinesBuffer.removeAll ()
+//    }
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -271,19 +276,7 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
     self.mSendThreadIsCancelled.withLock { $0 = true }
     self.mSendThreadActivationSemaphore.signal ()
     self.mSendThread = nil
-  //--- Read: cancel flushes io buffers and close connection
-//    self.mReceiveQueue.async { [weak self] in   // <-- important : cancel() sur la MÊME queue
-//      self?.mReadSource?.cancel()
-//    }
     self.mReadSource?.cancel ()
-//    print ("cancelled \(self.mReadSource?.isCancelled)")
-  //  self.mReadSource = nil
-  //---
-//    if let descriptor = self.mFileDescriptor.withLock ({ $0 }) {
-////      Darwin.tcflush (descriptor, TCIOFLUSH)
-////      Darwin.close (descriptor)
-//      self.mFileDescriptor.withLock { $0 = nil }
-//    }
   //--- Reset properties
     self.mIsSerialPortConnected = false
     self.mFileDescriptor.withLock { $0 = nil }
@@ -364,12 +357,34 @@ let kCtrlCharacterBackColor = NSColor.gray.blended (withFraction: 0.85, of: .whi
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  //MARK: Override this function for intercepting received data
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  nonisolated open func handleReceivedData (_ inData : Data) {
+//    self.mReceivedDataHandler.withLock {
+//      $0.mReceivedData += inData
+//      if let s = String (data: $0.mReceivedData, encoding: .utf8) {
+//        self.reportReceivingState ($0.mReceivedData.count)
+//        if self.nonisolatedConsoleLogIsEnabled {
+//          self.updateUIOnReceiving (string: s)
+//        }
+//        $0.mReceivedData.removeAll ()
+//        $0.mReceivedStringFragment += s
+//        let unixString = $0.mReceivedStringFragment.replacingOccurrences (of: "\r\n", with: "\n")
+//        var lines = unixString.components (separatedBy: "\n")
+//        $0.mReceivedStringFragment = lines.removeLast ()
+//        self.handleReceivedLines (lines, &$0.mReceivedLinesBuffer)
+//      }
+//    }
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //MARK: Override this function for intercepting received lines
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  nonisolated open func handleReceivedLines (_ inLines : [String], _ ioBuffer : inout [String]) {
-    ioBuffer += inLines
-  }
+//  nonisolated open func handleReceivedLines (_ inLines : [String], _ ioBuffer : inout [String]) {
+//    ioBuffer += inLines
+//  }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //MARK: Send Task
